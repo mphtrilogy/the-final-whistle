@@ -484,5 +484,3 @@ export function parseBoxScore(summary) {
 
   return { teams, scoringPlays }
 }
-
-
