@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useScoreboard, useBoxScore, parseESPNGame } from './hooks/useESPN'
-import { SCHEDULE_2026, WEEK_META, ALL_TEAMS, getTeamSchedule } from './data/schedule2026'
+import { useScoreboard, useBoxScore, useTeamSchedule, useWeekSchedule, parseESPNGame } from './hooks/useESPN'
+import { SCHEDULE_2026, WEEK_META, ALL_TEAMS } from './data/schedule2026'
 import { ti, networkColor, fmt } from './utils/teams'
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
@@ -507,44 +507,57 @@ function GameInfoDrawer({ game: g }) {
 
 // ── SCHEDULE VIEW ─────────────────────────────────────────────────────────────
 function ScheduleView({ teamFilter, setTeamFilter, weekFilter, setWeekFilter }) {
-  const weeksForTeam = teamFilter === 'All'
-    ? ALL_WEEKS
-    : ALL_WEEKS.filter(w =>
-        SCHEDULE_2026.some(g => g.week === w && (g.home === teamFilter || g.away === teamFilter))
-      )
+  const isTeamView = teamFilter !== 'All'
+  const isWeekView = !isTeamView && weekFilter !== 'All'
+  const isAllView  = !isTeamView && weekFilter === 'All'
 
-  const filtered = SCHEDULE_2026.filter(g => {
-    const teamOk = teamFilter === 'All' || g.home === teamFilter || g.away === teamFilter
-    const weekOk = weekFilter === 'All' || g.week === weekFilter
-    return teamOk && weekOk
+  // Team view — fetch from ESPN directly (accurate bye weeks, correct games)
+  const { games: teamGames, loading: teamLoading, error: teamError } = useTeamSchedule(
+    isTeamView ? teamFilter : null
+  )
+
+  // Week view — fetch from ESPN scoreboard
+  const { games: weekGames, loading: weekLoading } = useWeekSchedule(
+    isWeekView ? weekFilter : null
+  )
+
+  const loading = teamLoading || weekLoading
+
+  // Group team games by week
+  const teamByWeek = {}
+  teamGames.forEach(g => {
+    const w = g.week || 'TBD'
+    if (!teamByWeek[w]) teamByWeek[w] = []
+    teamByWeek[w].push(g)
   })
 
-  // Group by week
-  const byWeek = {}
-  filtered.forEach(g => {
-    const w = g.week
-    if (!byWeek[w]) byWeek[w] = []
-    byWeek[w].push(g)
-  })
-  const sortedWeeks = Object.keys(byWeek).map(Number).sort((a, b) => a - b)
-
-  // Team record if filtered
+  // Team record from ESPN data
   let record = null
-  if (teamFilter !== 'All') {
-    const played = filtered.filter(g => g.status === 'final')
+  if (isTeamView && teamGames.length) {
+    const played = teamGames.filter(g => g.status === 'final')
     const wins   = played.filter(g =>
       (g.home === teamFilter && g.homeScore > g.awayScore) ||
       (g.away === teamFilter && g.awayScore > g.homeScore)
     ).length
-    record = { w: wins, l: played.length - wins, gp: played.length }
+    let pf = 0, pa = 0
+    played.forEach(g => {
+      if (g.home === teamFilter) { pf += g.homeScore||0; pa += g.awayScore||0 }
+      else { pf += g.awayScore||0; pa += g.homeScore||0 }
+    })
+    record = { w: wins, l: played.length - wins, gp: played.length, pf, pa }
   }
+
+  const subtitle = isTeamView
+    ? `${ti(teamFilter).city} ${ti(teamFilter).nick} — 2026 Schedule`
+    : isWeekView ? `Week ${weekFilter} — All Games`
+    : '2026 Complete Season · Sep 9 – Jan 10'
 
   return (
     <div>
       <div className="section-bar">
-        <h2>2026 Schedule</h2>
+        <h2>Schedule</h2>
         <div className="sb-rule" />
-        <span className="sb-ct">Sep 9 – Jan 10 · 18 Weeks</span>
+        <span className="sb-ct">{subtitle}</span>
       </div>
 
       {/* Filters */}
@@ -553,42 +566,103 @@ function ScheduleView({ teamFilter, setTeamFilter, weekFilter, setWeekFilter }) 
           <span className="filter-label">Team</span>
           <div className="filter-pills">
             {['All', ...ALL_TEAMS].map(t => (
-              <button
-                key={t}
-                className={`fpill ${teamFilter === t ? 'on' : ''}`}
+              <button key={t} className={`fpill ${teamFilter === t ? 'on' : ''}`}
                 onClick={() => { setTeamFilter(t); setWeekFilter('All') }}
               >{t}</button>
             ))}
           </div>
         </div>
-        <div className="filter-group">
-          <span className="filter-label">Week</span>
-          <div className="filter-pills">
-            <button className={`fpill ${weekFilter === 'All' ? 'on' : ''}`} onClick={() => setWeekFilter('All')}>All</button>
-            {weeksForTeam.map(w => (
-              <button
-                key={w}
-                className={`fpill ${weekFilter === w ? 'on' : ''}`}
-                onClick={() => setWeekFilter(w)}
-              >Wk {w}</button>
-            ))}
+        {!isTeamView && (
+          <div className="filter-group">
+            <span className="filter-label">Week</span>
+            <div className="filter-pills">
+              <button className={`fpill ${weekFilter === 'All' ? 'on' : ''}`} onClick={() => setWeekFilter('All')}>All</button>
+              {ALL_WEEKS.map(w => (
+                <button key={w} className={`fpill ${weekFilter === w ? 'on' : ''}`}
+                  onClick={() => setWeekFilter(w)}>Wk {w}</button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Team summary */}
+      {/* Team record bar */}
       {record && (
         <div className="team-summary-bar">
-          <span className="ts-name">{teamFilter} · {ti(teamFilter).city} {ti(teamFilter).nick}</span>
-          <span className="ts-rec">{record.w}–{record.l}</span>
-          <button className="ts-clear" onClick={() => setTeamFilter('All')}>All teams ×</button>
+          <div className="ts-left">
+            <span className="ts-name">{teamFilter} · {ti(teamFilter).city} {ti(teamFilter).nick}</span>
+            <span className="ts-rec">{record.w}–{record.l}</span>
+          </div>
+          <div className="ts-right">
+            {record.gp > 0 && <>
+              <span className="ts-stat">PF <strong>{record.pf}</strong></span>
+              <span className="ts-stat">PA <strong>{record.pa}</strong></span>
+              <span className="ts-stat">Diff <strong>{record.pf-record.pa > 0 ? '+':''}{record.pf-record.pa}</strong></span>
+            </>}
+            <button className="ts-clear" onClick={() => setTeamFilter('All')}>All teams ×</button>
+          </div>
         </div>
       )}
 
-      {/* Games by week */}
-      {sortedWeeks.map(w => {
+      {loading && <div className="sch-loading">Loading from ESPN…</div>}
+
+      {/* TEAM VIEW — ESPN live data, fallback to static if off-season */}
+      {isTeamView && !loading && (
+        teamGames.length > 0
+          ? Object.keys(teamByWeek).sort((a,b) => Number(a)-Number(b)).map(w => {
+              const meta = WEEK_META[Number(w)] || { label: `Week ${w}`, dates: '' }
+              return (
+                <div key={w} className="sch-week-block">
+                  <div className="sch-week-header">
+                    <span className="swh-title">{meta.label}</span>
+                    <span className="swh-dates">{meta.dates}</span>
+                  </div>
+                  <div className="sch-games-list">
+                    {teamByWeek[w].map((g,i) => <ScheduleGame key={i} game={g} onTeamClick={setTeamFilter} />)}
+                  </div>
+                </div>
+              )
+            })
+          : /* Off-season fallback — static schedule data */
+            ALL_WEEKS.map(w => {
+              const wGames = SCHEDULE_2026.filter(g =>
+                g.week === w && (g.home === teamFilter || g.away === teamFilter)
+              )
+              if (!wGames.length) return null
+              const meta = WEEK_META[w] || { label: `Week ${w}`, dates: '' }
+              return (
+                <div key={w} className="sch-week-block">
+                  <div className="sch-week-header">
+                    <span className="swh-title">{meta.label}{meta.note ? ` · ${meta.note}` : ''}</span>
+                    <span className="swh-dates">{meta.dates}</span>
+                  </div>
+                  <div className="sch-games-list">
+                    {wGames.map((g,i) => <ScheduleGame key={i} game={g} onTeamClick={setTeamFilter} />)}
+                  </div>
+                </div>
+              )
+            })
+      )}
+
+      {/* WEEK VIEW — ESPN scoreboard */}
+      {isWeekView && !loading && (
+        <div className="sch-week-block">
+          <div className="sch-week-header">
+            <span className="swh-title">{WEEK_META[weekFilter]?.label || `Week ${weekFilter}`}</span>
+            <span className="swh-dates">{WEEK_META[weekFilter]?.dates || ''}</span>
+          </div>
+          <div className="sch-games-list">
+            {(weekGames.length ? weekGames : SCHEDULE_2026.filter(g => g.week === weekFilter))
+              .map((g,i) => <ScheduleGame key={i} game={g} onTeamClick={setTeamFilter} />)}
+          </div>
+        </div>
+      )}
+
+      {/* ALL VIEW — static schedule (all weeks) */}
+      {isAllView && !loading && ALL_WEEKS.map(w => {
+        const wGames = SCHEDULE_2026.filter(g => g.week === w)
+        if (!wGames.length) return null
         const meta = WEEK_META[w] || { label: `Week ${w}`, dates: '' }
-        const wGames = byWeek[w]
         return (
           <div key={w} className="sch-week-block">
             <div className="sch-week-header">
@@ -596,7 +670,7 @@ function ScheduleView({ teamFilter, setTeamFilter, weekFilter, setWeekFilter }) 
               <span className="swh-dates">{meta.dates}</span>
             </div>
             <div className="sch-games-list">
-              {wGames.map((g, i) => <ScheduleGame key={i} game={g} onTeamClick={setTeamFilter} />)}
+              {wGames.map((g,i) => <ScheduleGame key={i} game={g} onTeamClick={setTeamFilter} />)}
             </div>
           </div>
         )
