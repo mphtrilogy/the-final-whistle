@@ -4,21 +4,53 @@ import { SCHEDULE_2026, WEEK_META, ALL_TEAMS, getTeamSchedule } from './data/sch
 import { ti, networkColor, fmt } from './utils/teams'
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
-const CURRENT_WEEK = 1  // Update each week — or auto-detect from ESPN data
-const ROUND_ORDER  = ['Super Bowl','Conf Champs','Divisional','Wild Card']
-const ALL_WEEKS    = [...Array(18)].map((_,i) => i + 1)
+const ROUND_ORDER = ['Super Bowl','Conf Champs','Divisional','Wild Card']
+const ALL_WEEKS   = [...Array(18)].map((_,i) => i + 1)
+
+// Auto-detect current NFL week from the calendar
+// Season starts Sep 9, 2026 — each week is 7 days
+function getAutoWeek() {
+  const now = new Date()
+  const seasonStart = new Date('2026-09-09T00:00:00')
+  const offseasonEnd = new Date('2026-09-08T23:59:59')
+
+  // Before season starts — show Week 1 preview
+  if (now <= offseasonEnd) return 1
+
+  // After season starts — calculate week number
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000
+  const weekNum = Math.floor((now - seasonStart) / msPerWeek) + 1
+
+  // Cap at 18 regular season weeks
+  return Math.min(Math.max(weekNum, 1), 18)
+}
 
 // ── TOP-LEVEL NAV VIEWS ───────────────────────────────────────────────────────
 const VIEWS = ['Scores', 'Schedule', 'Standings', 'Leaders', 'Fantasy']
 
 export default function App() {
   const [activeView,    setActiveView]    = useState('Scores')
-  const [activeWeek,    setActiveWeek]    = useState(CURRENT_WEEK)
+  const [activeWeek,    setActiveWeek]    = useState(getAutoWeek)
   const [openCardId,    setOpenCardId]    = useState(null)
   const [teamFilter,    setTeamFilter]    = useState('All')
   const [weekFilter,    setWeekFilter]    = useState('All')
   const [fantMode,      setFantMode]      = useState('std') // 'std' | 'ppr'
   const [leadersTab,    setLeadersTab]    = useState('offense')
+
+  // Also ask ESPN what the current week is and sync if different
+  useEffect(() => {
+    fetch('/api/espn/scoreboard')
+      .then(r => r.json())
+      .then(data => {
+        const espnWeek = data?.week?.number
+        if (espnWeek && espnWeek >= 1 && espnWeek <= 18) {
+          setActiveWeek(espnWeek)
+        }
+      })
+      .catch(() => {
+        // No ESPN data — stick with calendar-calculated week
+      })
+  }, [])
 
   // Live ESPN scoreboard for current week
   const { data: espnData, loading, error, lastUpdated, refresh } = useScoreboard(activeWeek)
@@ -114,7 +146,7 @@ function Masthead({ lastUpdated, hasLiveGame, onRefresh }) {
       <div className="support-bar">
         <span className="support-text">Independent &amp; ad-free. If it's useful,</span>
         <span className="support-div">—</span>
-        <a className="support-link" href="https://buymeacoffee.com/mhughes65v" target="_blank" rel="noopener">
+        <a className="support-link" href="https://buymeacoffee.com/YOUR_BMAC_USERNAME" target="_blank" rel="noopener">
           buy me a coffee ☕
         </a>
         {lastUpdated && (
@@ -778,7 +810,7 @@ function Footer() {
     <footer className="footer">
       <span>The Final Whistle · NFL 2026</span>
       <span className="footer-bmac">
-        Enjoying this? <a href="https://buymeacoffee.com/mhughes65v" target="_blank" rel="noopener">Buy me a coffee</a>
+        Enjoying this? <a href="https://buymeacoffee.com/YOUR_BMAC_USERNAME" target="_blank" rel="noopener">Buy me a coffee</a>
       </span>
       <span>6pt TD · Standard / PPR</span>
     </footer>
