@@ -658,23 +658,44 @@ function ScheduleView({ teamFilter, setTeamFilter, weekFilter, setWeekFilter }) 
         </div>
       )}
 
-      {/* ALL VIEW — static schedule (all weeks) */}
-      {isAllView && !loading && ALL_WEEKS.map(w => {
-        const wGames = SCHEDULE_2026.filter(g => g.week === w)
-        if (!wGames.length) return null
-        const meta = WEEK_META[w] || { label: `Week ${w}`, dates: '' }
-        return (
-          <div key={w} className="sch-week-block">
-            <div className="sch-week-header">
-              <span className="swh-title">{meta.label}{meta.note ? ` · ${meta.note}` : ''}</span>
-              <span className="swh-dates">{meta.dates}</span>
-            </div>
-            <div className="sch-games-list">
-              {wGames.map((g,i) => <ScheduleGame key={i} game={g} onTeamClick={setTeamFilter} />)}
-            </div>
+      {/* ALL VIEW — season overview, no individual game matchups */}
+      {isAllView && !loading && (
+        <div>
+          <div className="sch-overview-prompt">
+            <div className="sop-icon">🏈</div>
+            <div className="sop-title">Select a team to see their full schedule</div>
+            <div className="sop-text">Tap any team above for their confirmed ESPN schedule — correct bye weeks, kickoff times, and results as the season progresses.</div>
           </div>
-        )
-      })}
+          <div className="sch-season-grid">
+            {ALL_WEEKS.map(w => {
+              const meta = WEEK_META[w] || { label: `Week ${w}`, dates: '' }
+              // Collect notable games/events for this week from our confirmed data
+              const notables = SCHEDULE_2026.filter(g =>
+                g.week === w && (g.note || g.intl)
+              )
+              return (
+                <div key={w} className="sch-season-card">
+                  <div className="ssc-week">{meta.label}</div>
+                  <div className="ssc-dates">{meta.dates}</div>
+                  {meta.note && <div className="ssc-note">{meta.note}</div>}
+                  {notables.map((g, i) => (
+                    <div key={i} className="ssc-highlight">
+                      {g.intl && <span className="ssc-intl">🌍 {g.intlCity}</span>}
+                      {g.note && !g.intl && <span className="ssc-event">{g.note}</span>}
+                    </div>
+                  ))}
+                  <button
+                    className="ssc-pick-team"
+                    onClick={() => {
+                      setWeekFilter(w)
+                    }}
+                  >View Week {w} →</button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
