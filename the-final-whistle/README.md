@@ -103,7 +103,7 @@ the-final-whistle/
 ## Customization
 
 ### Buy Me a Coffee
-Find and replace `YOUR_BMAC_USERNAME` with your actual BMAC handle.
+Find and replace `mhughes65v` with your actual BMAC handle.
 
 ### Adding Player Leaders (post Week 1)
 The Leaders view shows a "coming soon" placeholder until the season starts.
