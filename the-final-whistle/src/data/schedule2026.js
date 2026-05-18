@@ -286,8 +286,8 @@ export const SCHEDULE_2026 = [
   { week:17, date:'Jan 4',  day:'Mon', time:'8:15 PM', home:'SF',  away:'PHI', network:'ESPN/MNF',      status:'upcoming', intl:false },
 
   // ── WEEK 18 · Jan 8–10, 2027 (ALL INTRA-DIVISION) ───────────────────────
-  { week:18, date:'Jan 10', day:'Sun', time:'TBD',     home:'NE',  away:'BUF', network:'TBD',           status:'upcoming', intl:false, note:'All Week 18 games at same time' },
-  { week:18, date:'Jan 10', day:'Sun', time:'TBD',     home:'MIA', away:'NYJ', network:'TBD',           status:'upcoming', intl:false },
+  { week:18, date:'Jan 10', day:'Sun', time:'TBD',     home:'NE',  away:'MIA', network:'TBD',           status:'upcoming', intl:false, note:'All Week 18 games at same time' },
+  { week:18, date:'Jan 10', day:'Sun', time:'TBD',     home:'BUF', away:'NYJ', network:'TBD',           status:'upcoming', intl:false },
   { week:18, date:'Jan 10', day:'Sun', time:'TBD',     home:'BAL', away:'CLE', network:'TBD',           status:'upcoming', intl:false },
   { week:18, date:'Jan 10', day:'Sun', time:'TBD',     home:'CIN', away:'PIT', network:'TBD',           status:'upcoming', intl:false },
   { week:18, date:'Jan 10', day:'Sun', time:'TBD',     home:'HOU', away:'TEN', network:'TBD',           status:'upcoming', intl:false },
