@@ -160,7 +160,7 @@ function Masthead({ lastUpdated, hasLiveGame, onRefresh }) {
       <div className="support-bar">
         <span className="support-text">Independent &amp; ad-free. If it's useful,</span>
         <span className="support-div">—</span>
-        <a className="support-link" href="https://buymeacoffee.com/YOUR_BMAC_USERNAME" target="_blank" rel="noopener">
+        <a className="support-link" href="https://buymeacoffee.com/mhughes65v" target="_blank" rel="noopener">
           buy me a coffee ☕
         </a>
         {lastUpdated && (
@@ -1243,7 +1243,7 @@ function Footer() {
     <footer className="footer">
       <span>The Final Whistle · NFL 2026</span>
       <span className="footer-bmac">
-        Enjoying this? <a href="https://buymeacoffee.com/YOUR_BMAC_USERNAME" target="_blank" rel="noopener">Buy me a coffee</a>
+        Enjoying this? <a href="https://buymeacoffee.com/mhughes65v" target="_blank" rel="noopener">Buy me a coffee</a>
       </span>
       <span>6pt TD · Standard / PPR</span>
     </footer>
