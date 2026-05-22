@@ -310,6 +310,7 @@ export function parseBoxScore(summary) {
   return { teams, scoringPlays }
 }
 
+export function useScoreboard(week = null) {
 const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -340,7 +341,7 @@ const [data, setData] = useState(null)
   }, [fetch_scores])
 
   return { data, loading, error, lastUpdated, refresh: fetch_scores }
-  }
+  
 
 export function useBoxScore(gameId) {
   const [data, setData] = useState(null)
