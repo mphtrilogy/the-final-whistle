@@ -315,7 +315,7 @@ body::before {
 .sg-note { font-family: 'IBM Plex Mono',monospace; font-size: 8px; letter-spacing:.1em; text-transform: uppercase; color: var(--gold); margin-top: 4px; }
 
 /* ── STANDINGS ───────────────────────────────────────────────────────────────── */
-.standings-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 16px; }
+.standings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 0; border-left: 1px solid var(--rule); padding: 16px; gap: 16px; }
 .div-block { border: 1px solid var(--rule); border-radius: var(--r); overflow: hidden; }
 .div-name  { font-family: 'IBM Plex Mono',monospace; font-size: 9px; letter-spacing:.2em; text-transform: uppercase; color: var(--paper); background: var(--ink); padding: 6px 10px; font-weight: 600; }
 .std-table { width: 100%; border-collapse: collapse; }
@@ -390,3 +390,59 @@ body::before {
 .game-card.featured .dtab    { color: rgba(245,240,232,.4); }
 .game-card.featured .dtab:hover, .game-card.featured .dtab.on { color: var(--paper); }
 .game-card.featured .dtab.on { border-bottom-color: var(--gold); }
+
+.sch-loading{padding:24px 16px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted-lt);text-align:center}
+.sch-error{padding:12px 16px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent);background:#fff3f0;border-bottom:1px solid #f5c0b0}
+
+/* SEASON OVERVIEW (All teams, All weeks view) */
+.sch-overview-prompt{display:flex;flex-direction:column;align-items:center;text-align:center;padding:28px 20px 16px;border-bottom:1px solid var(--rule);gap:8px}
+.sop-icon{font-size:32px}
+.sop-title{font-family:'Playfair Display',serif;font-size:18px;font-weight:700}
+.sop-text{font-size:12px;color:var(--muted);max-width:420px;line-height:1.6}
+.sch-season-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));border-left:1px solid var(--rule)}
+.sch-season-card{border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.ssc-week{font-family:'Playfair Display',serif;font-size:14px;font-weight:700}
+.ssc-dates{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted-lt);text-transform:uppercase}
+.ssc-note{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:.08em;color:var(--gold);text-transform:uppercase;margin-top:2px}
+.ssc-highlight{margin-top:2px}
+.ssc-intl{font-family:'IBM Plex Mono',monospace;font-size:8px;color:#2a6b4a;letter-spacing:.06em}
+.ssc-event{font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--gold);letter-spacing:.06em}
+.ssc-pick-team{margin-top:auto;padding-top:8px;font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);background:none;border:none;cursor:pointer;text-align:left;padding-left:0}
+.ssc-pick-team:hover{color:var(--ink)}
+
+/* ── TRENDS VIEW ──────────────────────────────────────────────────────────── */
+.trends-controls{display:flex;flex-direction:column;gap:0;border-bottom:1px solid var(--rule);background:var(--paper-mid)}
+.tc-group{display:flex;align-items:flex-start;gap:8px;padding:8px 16px;border-bottom:1px solid rgba(42,31,14,.06)}
+.tc-group:last-child{border-bottom:none}
+.tc-label{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);flex-shrink:0;padding-top:4px;min-width:52px}
+.tc-btns{display:flex;flex-wrap:wrap;gap:3px}
+.tc-btn{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border:1px solid var(--rule);background:none;color:var(--muted);border-radius:var(--r);transition:all .12s;cursor:pointer}
+.tc-btn:hover{border-color:var(--ink);color:var(--ink)}
+.tc-btn.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.trends-loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.tl-spinner{font-size:20px;animation:spin 1s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+.trends-table-wrap{overflow-x:auto}
+.trends-table{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:11px}
+.trends-table th{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-lt);padding:6px 10px;text-align:right;border-bottom:2px solid var(--rule-hvy);background:var(--paper-dark);font-weight:500;white-space:nowrap}
+.trends-table th.tt-name{text-align:left}
+.trends-table th.tt-rank{text-align:center;width:32px}
+.trends-table td{padding:7px 10px;text-align:right;border-bottom:1px solid rgba(42,31,14,.05);color:var(--muted);vertical-align:middle}
+.trends-table td.tt-name{text-align:left;font-family:'Libre Baskerville',serif;font-size:11px;color:var(--ink);font-weight:400}
+.trends-table td.tt-rank{text-align:center;color:var(--muted-lt);font-size:9px}
+.trends-table td.tt-team{color:var(--muted-lt);font-size:9px}
+.trends-table td.tt-pos{color:var(--accent);font-size:9px;font-weight:600}
+.trends-table td.tt-pts{color:var(--ink);font-weight:700;font-size:13px}
+.trends-table td.tt-avg{color:var(--muted)}
+.trends-table td.tt-last{color:var(--ink)}
+.trends-table td.tt-trend{font-size:14px;text-align:center}
+.trends-table tr.tt-top3 td{background:rgba(200,168,75,.05)}
+.trends-table tr.tt-top3 td.tt-rank{color:var(--gold);font-weight:700}
+.trends-table tr:hover td{background:var(--paper-dark)}
+.trends-table tr:last-child td{border-bottom:none}
+.trend-hot{font-size:14px}
+.trend-cold{font-size:14px;opacity:.7}
+.trend-new{font-size:14px}
+.trends-footer{padding:8px 16px;font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:.08em;color:var(--muted-lt);border-top:1px solid var(--rule);background:var(--paper-dark)}

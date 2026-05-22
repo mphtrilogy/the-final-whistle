@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useScoreboard, useBoxScore, parseESPNGame } from './hooks/useESPN'
-import { SCHEDULE_2026, WEEK_META, ALL_TEAMS, getTeamSchedule } from './data/schedule2026'
+import { useScoreboard, useBoxScore, useTeamSchedule, useWeekSchedule, parseESPNGame } from './hooks/useESPN'
+import { SCHEDULE_2026, WEEK_META, ALL_TEAMS } from './data/schedule2026'
 import { ti, networkColor, fmt } from './utils/teams'
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ function getAutoWeek() {
 }
 
 // ── TOP-LEVEL NAV VIEWS ───────────────────────────────────────────────────────
-const VIEWS = ['Scores', 'Schedule', 'Standings', 'Leaders', 'Fantasy']
+const VIEWS = ['Scores', 'Schedule', 'Standings', 'Trends', 'Leaders', 'Fantasy']
 
 export default function App() {
   const [activeView,    setActiveView]    = useState('Scores')
@@ -36,6 +36,9 @@ export default function App() {
   const [weekFilter,    setWeekFilter]    = useState('All')
   const [fantMode,      setFantMode]      = useState('std') // 'std' | 'ppr'
   const [leadersTab,    setLeadersTab]    = useState('offense')
+  const [trendsMode,    setTrendsMode]    = useState('std') // 'std' | 'ppr'
+  const [trendsRange,   setTrendsRange]   = useState(3)     // 1 | 3 | 5 | 'season'
+  const [trendsPos,     setTrendsPos]     = useState('ALL') // ALL QB RB WR TE K DEF
 
   // Also ask ESPN what the current week is and sync if different
   useEffect(() => {
@@ -114,6 +117,17 @@ export default function App() {
           />
         )}
         {activeView === 'Standings' && <StandingsView />}
+        {activeView === 'Trends'    && (
+          <TrendsView
+            currentWeek={activeWeek}
+            mode={trendsMode}
+            setMode={setTrendsMode}
+            range={trendsRange}
+            setRange={setTrendsRange}
+            pos={trendsPos}
+            setPos={setTrendsPos}
+          />
+        )}
         {activeView === 'Leaders'   && (
           <LeadersView tab={leadersTab} setTab={setLeadersTab} />
         )}
@@ -507,44 +521,57 @@ function GameInfoDrawer({ game: g }) {
 
 // ── SCHEDULE VIEW ─────────────────────────────────────────────────────────────
 function ScheduleView({ teamFilter, setTeamFilter, weekFilter, setWeekFilter }) {
-  const weeksForTeam = teamFilter === 'All'
-    ? ALL_WEEKS
-    : ALL_WEEKS.filter(w =>
-        SCHEDULE_2026.some(g => g.week === w && (g.home === teamFilter || g.away === teamFilter))
-      )
+  const isTeamView = teamFilter !== 'All'
+  const isWeekView = !isTeamView && weekFilter !== 'All'
+  const isAllView  = !isTeamView && weekFilter === 'All'
 
-  const filtered = SCHEDULE_2026.filter(g => {
-    const teamOk = teamFilter === 'All' || g.home === teamFilter || g.away === teamFilter
-    const weekOk = weekFilter === 'All' || g.week === weekFilter
-    return teamOk && weekOk
+  // Team view — fetch from ESPN directly (accurate bye weeks, correct games)
+  const { games: teamGames, loading: teamLoading, error: teamError } = useTeamSchedule(
+    isTeamView ? teamFilter : null
+  )
+
+  // Week view — fetch from ESPN scoreboard
+  const { games: weekGames, loading: weekLoading } = useWeekSchedule(
+    isWeekView ? weekFilter : null
+  )
+
+  const loading = teamLoading || weekLoading
+
+  // Group team games by week
+  const teamByWeek = {}
+  teamGames.forEach(g => {
+    const w = g.week || 'TBD'
+    if (!teamByWeek[w]) teamByWeek[w] = []
+    teamByWeek[w].push(g)
   })
 
-  // Group by week
-  const byWeek = {}
-  filtered.forEach(g => {
-    const w = g.week
-    if (!byWeek[w]) byWeek[w] = []
-    byWeek[w].push(g)
-  })
-  const sortedWeeks = Object.keys(byWeek).map(Number).sort((a, b) => a - b)
-
-  // Team record if filtered
+  // Team record from ESPN data
   let record = null
-  if (teamFilter !== 'All') {
-    const played = filtered.filter(g => g.status === 'final')
+  if (isTeamView && teamGames.length) {
+    const played = teamGames.filter(g => g.status === 'final')
     const wins   = played.filter(g =>
       (g.home === teamFilter && g.homeScore > g.awayScore) ||
       (g.away === teamFilter && g.awayScore > g.homeScore)
     ).length
-    record = { w: wins, l: played.length - wins, gp: played.length }
+    let pf = 0, pa = 0
+    played.forEach(g => {
+      if (g.home === teamFilter) { pf += g.homeScore||0; pa += g.awayScore||0 }
+      else { pf += g.awayScore||0; pa += g.homeScore||0 }
+    })
+    record = { w: wins, l: played.length - wins, gp: played.length, pf, pa }
   }
+
+  const subtitle = isTeamView
+    ? `${ti(teamFilter).city} ${ti(teamFilter).nick} — 2026 Schedule`
+    : isWeekView ? `Week ${weekFilter} — All Games`
+    : '2026 Complete Season · Sep 9 – Jan 10'
 
   return (
     <div>
       <div className="section-bar">
-        <h2>2026 Schedule</h2>
+        <h2>Schedule</h2>
         <div className="sb-rule" />
-        <span className="sb-ct">Sep 9 – Jan 10 · 18 Weeks</span>
+        <span className="sb-ct">{subtitle}</span>
       </div>
 
       {/* Filters */}
@@ -553,54 +580,136 @@ function ScheduleView({ teamFilter, setTeamFilter, weekFilter, setWeekFilter }) 
           <span className="filter-label">Team</span>
           <div className="filter-pills">
             {['All', ...ALL_TEAMS].map(t => (
-              <button
-                key={t}
-                className={`fpill ${teamFilter === t ? 'on' : ''}`}
+              <button key={t} className={`fpill ${teamFilter === t ? 'on' : ''}`}
                 onClick={() => { setTeamFilter(t); setWeekFilter('All') }}
               >{t}</button>
             ))}
           </div>
         </div>
-        <div className="filter-group">
-          <span className="filter-label">Week</span>
-          <div className="filter-pills">
-            <button className={`fpill ${weekFilter === 'All' ? 'on' : ''}`} onClick={() => setWeekFilter('All')}>All</button>
-            {weeksForTeam.map(w => (
-              <button
-                key={w}
-                className={`fpill ${weekFilter === w ? 'on' : ''}`}
-                onClick={() => setWeekFilter(w)}
-              >Wk {w}</button>
-            ))}
+        {!isTeamView && (
+          <div className="filter-group">
+            <span className="filter-label">Week</span>
+            <div className="filter-pills">
+              <button className={`fpill ${weekFilter === 'All' ? 'on' : ''}`} onClick={() => setWeekFilter('All')}>All</button>
+              {ALL_WEEKS.map(w => (
+                <button key={w} className={`fpill ${weekFilter === w ? 'on' : ''}`}
+                  onClick={() => setWeekFilter(w)}>Wk {w}</button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Team summary */}
+      {/* Team record bar */}
       {record && (
         <div className="team-summary-bar">
-          <span className="ts-name">{teamFilter} · {ti(teamFilter).city} {ti(teamFilter).nick}</span>
-          <span className="ts-rec">{record.w}–{record.l}</span>
-          <button className="ts-clear" onClick={() => setTeamFilter('All')}>All teams ×</button>
+          <div className="ts-left">
+            <span className="ts-name">{teamFilter} · {ti(teamFilter).city} {ti(teamFilter).nick}</span>
+            <span className="ts-rec">{record.w}–{record.l}</span>
+          </div>
+          <div className="ts-right">
+            {record.gp > 0 && <>
+              <span className="ts-stat">PF <strong>{record.pf}</strong></span>
+              <span className="ts-stat">PA <strong>{record.pa}</strong></span>
+              <span className="ts-stat">Diff <strong>{record.pf-record.pa > 0 ? '+':''}{record.pf-record.pa}</strong></span>
+            </>}
+            <button className="ts-clear" onClick={() => setTeamFilter('All')}>All teams ×</button>
+          </div>
         </div>
       )}
 
-      {/* Games by week */}
-      {sortedWeeks.map(w => {
-        const meta = WEEK_META[w] || { label: `Week ${w}`, dates: '' }
-        const wGames = byWeek[w]
-        return (
-          <div key={w} className="sch-week-block">
-            <div className="sch-week-header">
-              <span className="swh-title">{meta.label}{meta.note ? ` · ${meta.note}` : ''}</span>
-              <span className="swh-dates">{meta.dates}</span>
-            </div>
-            <div className="sch-games-list">
-              {wGames.map((g, i) => <ScheduleGame key={i} game={g} onTeamClick={setTeamFilter} />)}
-            </div>
+      {loading && <div className="sch-loading">Loading from ESPN…</div>}
+
+      {/* TEAM VIEW — ESPN live data, fallback to static if off-season */}
+      {isTeamView && !loading && (
+        teamGames.length > 0
+          ? Object.keys(teamByWeek).sort((a,b) => Number(a)-Number(b)).map(w => {
+              const meta = WEEK_META[Number(w)] || { label: `Week ${w}`, dates: '' }
+              return (
+                <div key={w} className="sch-week-block">
+                  <div className="sch-week-header">
+                    <span className="swh-title">{meta.label}</span>
+                    <span className="swh-dates">{meta.dates}</span>
+                  </div>
+                  <div className="sch-games-list">
+                    {teamByWeek[w].map((g,i) => <ScheduleGame key={i} game={g} onTeamClick={setTeamFilter} />)}
+                  </div>
+                </div>
+              )
+            })
+          : /* Off-season fallback — static schedule data */
+            ALL_WEEKS.map(w => {
+              const wGames = SCHEDULE_2026.filter(g =>
+                g.week === w && (g.home === teamFilter || g.away === teamFilter)
+              )
+              if (!wGames.length) return null
+              const meta = WEEK_META[w] || { label: `Week ${w}`, dates: '' }
+              return (
+                <div key={w} className="sch-week-block">
+                  <div className="sch-week-header">
+                    <span className="swh-title">{meta.label}{meta.note ? ` · ${meta.note}` : ''}</span>
+                    <span className="swh-dates">{meta.dates}</span>
+                  </div>
+                  <div className="sch-games-list">
+                    {wGames.map((g,i) => <ScheduleGame key={i} game={g} onTeamClick={setTeamFilter} />)}
+                  </div>
+                </div>
+              )
+            })
+      )}
+
+      {/* WEEK VIEW — ESPN scoreboard */}
+      {isWeekView && !loading && (
+        <div className="sch-week-block">
+          <div className="sch-week-header">
+            <span className="swh-title">{WEEK_META[weekFilter]?.label || `Week ${weekFilter}`}</span>
+            <span className="swh-dates">{WEEK_META[weekFilter]?.dates || ''}</span>
           </div>
-        )
-      })}
+          <div className="sch-games-list">
+            {(weekGames.length ? weekGames : SCHEDULE_2026.filter(g => g.week === weekFilter))
+              .map((g,i) => <ScheduleGame key={i} game={g} onTeamClick={setTeamFilter} />)}
+          </div>
+        </div>
+      )}
+
+      {/* ALL VIEW — season overview, no individual game matchups */}
+      {isAllView && !loading && (
+        <div>
+          <div className="sch-overview-prompt">
+            <div className="sop-icon">🏈</div>
+            <div className="sop-title">Select a team to see their full schedule</div>
+            <div className="sop-text">Tap any team above for their confirmed ESPN schedule — correct bye weeks, kickoff times, and results as the season progresses.</div>
+          </div>
+          <div className="sch-season-grid">
+            {ALL_WEEKS.map(w => {
+              const meta = WEEK_META[w] || { label: `Week ${w}`, dates: '' }
+              // Collect notable games/events for this week from our confirmed data
+              const notables = SCHEDULE_2026.filter(g =>
+                g.week === w && (g.note || g.intl)
+              )
+              return (
+                <div key={w} className="sch-season-card">
+                  <div className="ssc-week">{meta.label}</div>
+                  <div className="ssc-dates">{meta.dates}</div>
+                  {meta.note && <div className="ssc-note">{meta.note}</div>}
+                  {notables.map((g, i) => (
+                    <div key={i} className="ssc-highlight">
+                      {g.intl && <span className="ssc-intl">🌍 {g.intlCity}</span>}
+                      {g.note && !g.intl && <span className="ssc-event">{g.note}</span>}
+                    </div>
+                  ))}
+                  <button
+                    className="ssc-pick-team"
+                    onClick={() => {
+                      setWeekFilter(w)
+                    }}
+                  >View Week {w} →</button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -804,7 +913,331 @@ function FantasyView({ mode, setMode }) {
   )
 }
 
-// ── FOOTER ────────────────────────────────────────────────────────────────────
+// ── FANTASY SCORING HELPERS ───────────────────────────────────────────────────
+function calcFantasyPts(stats, mode, pos) {
+  if (!stats) return 0
+  let pts = 0
+
+  if (pos === 'K') {
+    // Kicker scoring: 3pt FG <40, 4pt 40-49, 5pt 50+, 1pt XP
+    pts += (parseInt(stats['FG'] || stats['FGM'] || 0)) * 3
+    pts += (parseInt(stats['XP'] || stats['XPM'] || 0)) * 1
+    return Math.round(pts * 10) / 10
+  }
+
+  if (pos === 'DEF') {
+    // DEF/ST scoring
+    const sacks    = parseFloat(stats['SACKS'] || stats['TOT'] || 0)
+    const ints     = parseFloat(stats['INT'] || 0)
+    const fum      = parseFloat(stats['FR']  || 0)
+    const td       = parseFloat(stats['TD']  || 0)
+    pts += sacks * 1
+    pts += ints  * 2
+    pts += fum   * 2
+    pts += td    * 6
+    return Math.round(pts * 10) / 10
+  }
+
+  // Skill positions
+  const passYds = parseFloat(stats['YDS'] || 0)
+  const passTDs = parseFloat(stats['TD']  || 0)
+  const ints    = parseFloat(stats['INT'] || 0)
+  const rushYds = parseFloat(stats['YDS'] || 0)
+  const rushTDs = parseFloat(stats['TD']  || 0)
+  const recYds  = parseFloat(stats['YDS'] || 0)
+  const recTDs  = parseFloat(stats['TD']  || 0)
+  const recs    = parseFloat(stats['REC'] || 0)
+
+  // Passing
+  if (stats['C/ATT'] || stats['QBR']) {
+    pts += passYds / 25
+    pts += passTDs * 6
+    pts -= ints    * 2
+  }
+  // Rushing
+  if (stats['CAR']) {
+    pts += rushYds / 10
+    pts += rushTDs * 6
+  }
+  // Receiving
+  if (stats['REC'] || stats['TGT']) {
+    pts += recYds / 10
+    pts += recTDs * 6
+    if (mode === 'ppr') pts += recs
+  }
+
+  return Math.round(pts * 10) / 10
+}
+
+// ESPN stat category → position mapping
+const CAT_TO_POS = {
+  passing:   'QB',
+  rushing:   'RB',
+  receiving: 'WR',
+  kicking:   'K',
+  defensive: 'DEF',
+}
+
+// ── TRENDS VIEW ───────────────────────────────────────────────────────────────
+function TrendsView({ currentWeek, mode, setMode, range, setRange, pos, setPos }) {
+  const [players, setPlayers]   = useState([])
+  const [loading, setLoading]   = useState(false)
+  const [error,   setError]     = useState(null)
+  const [fetched, setFetched]   = useState(false)
+
+  const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF']
+  const RANGES    = [
+    { label: 'This Week', value: 1  },
+    { label: 'Last 3',    value: 3  },
+    { label: 'Last 5',    value: 5  },
+    { label: 'Season',    value: 'season' },
+  ]
+
+  const seasonStarted = currentWeek > 1 || new Date() >= new Date('2026-09-09')
+
+  useEffect(() => {
+    if (!seasonStarted) return
+    fetchTrends()
+  }, [range, currentWeek])
+
+  async function fetchTrends() {
+    setLoading(true)
+    setError(null)
+    try {
+      // Determine which weeks to fetch
+      const weeksToFetch = []
+      if (range === 'season') {
+        for (let w = 1; w <= currentWeek; w++) weeksToFetch.push(w)
+      } else {
+        const start = Math.max(1, currentWeek - (range - 1))
+        for (let w = start; w <= currentWeek; w++) weeksToFetch.push(w)
+      }
+
+      // Fetch all scoreboards in parallel
+      const scoreboards = await Promise.all(
+        weeksToFetch.map(w =>
+          fetch(`/api/espn/scoreboard?week=${w}&seasontype=2&limit=20`)
+            .then(r => r.json())
+            .catch(() => null)
+        )
+      )
+
+      // Get all game IDs
+      const gameIds = []
+      scoreboards.forEach((sb, idx) => {
+        if (!sb?.events) return
+        sb.events.forEach(ev => {
+          gameIds.push({ id: ev.id, week: weeksToFetch[idx] })
+        })
+      })
+
+      // Fetch all box scores in parallel (cap at 20 to avoid rate limits)
+      const capped = gameIds.slice(0, 20)
+      const boxScores = await Promise.all(
+        capped.map(g =>
+          fetch(`/api/espn/summary?event=${g.id}`)
+            .then(r => r.json())
+            .then(data => ({ ...data, week: g.week }))
+            .catch(() => null)
+        )
+      )
+
+      // Aggregate player stats across all box scores
+      const playerMap = {} // key: name+team
+
+      boxScores.forEach(bs => {
+        if (!bs?.boxscore?.players) return
+        bs.boxscore.players.forEach(teamData => {
+          const tm = teamData.team?.abbreviation || ''
+          teamData.statistics?.forEach(statGroup => {
+            const cat = statGroup.name
+            const detectedPos = CAT_TO_POS[cat] || 'SKILL'
+            statGroup.athletes?.forEach(a => {
+              const name = a.athlete?.displayName || ''
+              if (!name) return
+              const key = `${name}|${tm}`
+              const vals = {}
+              statGroup.labels?.forEach((lbl, i) => {
+                vals[lbl] = a.stats?.[i] || '0'
+              })
+              const weekPts = calcFantasyPts(vals, mode, detectedPos)
+              if (!playerMap[key]) {
+                playerMap[key] = {
+                  name, team: tm, pos: detectedPos,
+                  weeks: {}, totalPts: 0, weekCount: 0,
+                }
+              }
+              if (!playerMap[key].weeks[bs.week]) {
+                playerMap[key].weeks[bs.week] = 0
+              }
+              playerMap[key].weeks[bs.week] += weekPts
+            })
+          })
+        })
+      })
+
+      // Calculate totals, averages, and trend
+      const allPlayers = Object.values(playerMap).map(p => {
+        const weekPts = Object.values(p.weeks)
+        const total   = weekPts.reduce((a, b) => a + b, 0)
+        const avg     = weekPts.length > 0 ? total / weekPts.length : 0
+        const lastWk  = p.weeks[currentWeek] || 0
+        const trend   = weekPts.length > 1
+          ? lastWk >= avg ? 'hot' : 'cold'
+          : 'new'
+        return {
+          ...p,
+          totalPts:  Math.round(total * 10) / 10,
+          avgPts:    Math.round(avg   * 10) / 10,
+          lastWkPts: Math.round(lastWk * 10) / 10,
+          trend,
+          weekCount: weekPts.length,
+        }
+      })
+
+      // Sort by total points descending
+      allPlayers.sort((a, b) => b.totalPts - a.totalPts)
+      setPlayers(allPlayers)
+      setFetched(true)
+    } catch(e) {
+      setError('Could not load trend data from ESPN.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Filter by position
+  const filtered = pos === 'ALL'
+    ? players.slice(0, 30)
+    : players.filter(p => p.pos === pos).slice(0, 15)
+
+  const rangeLabel = RANGES.find(r => r.value === range)?.label || 'Last 3'
+
+  return (
+    <div>
+      <div className="section-bar">
+        <h2>Fantasy Trends</h2>
+        <div className="sb-rule" />
+        <span className="sb-ct">{rangeLabel} · {mode === 'ppr' ? 'PPR' : 'Standard'}</span>
+      </div>
+
+      {/* Controls */}
+      <div className="trends-controls">
+        {/* Week range */}
+        <div className="tc-group">
+          <span className="tc-label">Range</span>
+          <div className="tc-btns">
+            {RANGES.map(r => (
+              <button
+                key={r.value}
+                className={`tc-btn ${range === r.value ? 'on' : ''}`}
+                onClick={() => setRange(r.value)}
+              >{r.label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Scoring mode */}
+        <div className="tc-group">
+          <span className="tc-label">Scoring</span>
+          <div className="tc-btns">
+            <button className={`tc-btn ${mode === 'std' ? 'on' : ''}`} onClick={() => setMode('std')}>Standard</button>
+            <button className={`tc-btn ${mode === 'ppr' ? 'on' : ''}`} onClick={() => setMode('ppr')}>PPR</button>
+          </div>
+        </div>
+
+        {/* Position filter */}
+        <div className="tc-group">
+          <span className="tc-label">Position</span>
+          <div className="tc-btns">
+            {POSITIONS.map(p => (
+              <button
+                key={p}
+                className={`tc-btn ${pos === p ? 'on' : ''}`}
+                onClick={() => setPos(p)}
+              >{p}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Off-season placeholder */}
+      {!seasonStarted && (
+        <div className="leaders-coming-soon">
+          <div className="cs-icon">🔥</div>
+          <div className="cs-title">Trends Available Week 3</div>
+          <div className="cs-text">
+            Fantasy trending stats — hottest players over the last 1, 3, or 5 weeks —
+            will populate automatically once the season gets rolling. Standard and PPR
+            scoring, all positions including K and DEF, top 10+ per position.
+          </div>
+          <div className="cs-date">Season opens Sep 9 · SEA vs NE · Need 3 weeks for full trends</div>
+        </div>
+      )}
+
+      {/* Loading */}
+      {seasonStarted && loading && (
+        <div className="trends-loading">
+          <div className="tl-spinner">⚡</div>
+          <div>Crunching {range === 'season' ? 'season' : `last ${range} week${range > 1 ? 's' : ''}`} of box scores…</div>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && <div className="sch-error">{error}</div>}
+
+      {/* Player table */}
+      {seasonStarted && !loading && fetched && filtered.length > 0 && (
+        <div className="trends-table-wrap">
+          <table className="trends-table">
+            <thead>
+              <tr>
+                <th className="tt-rank">#</th>
+                <th className="tt-name">Player</th>
+                <th className="tt-team">TM</th>
+                <th className="tt-pos">POS</th>
+                <th className="tt-pts">Total</th>
+                <th className="tt-avg">Avg/Wk</th>
+                <th className="tt-last">Last Wk</th>
+                <th className="tt-trend">Trend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((p, i) => (
+                <tr key={`${p.name}-${p.team}`} className={i < 3 ? 'tt-top3' : ''}>
+                  <td className="tt-rank">{i + 1}</td>
+                  <td className="tt-name">{p.name}</td>
+                  <td className="tt-team">{p.team}</td>
+                  <td className="tt-pos">{p.pos}</td>
+                  <td className="tt-pts">{p.totalPts}</td>
+                  <td className="tt-avg">{p.avgPts}</td>
+                  <td className="tt-last">{p.lastWkPts}</td>
+                  <td className="tt-trend">
+                    {p.trend === 'hot'  && <span className="trend-hot">🔥</span>}
+                    {p.trend === 'cold' && <span className="trend-cold">❄️</span>}
+                    {p.trend === 'new'  && <span className="trend-new">⚡</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="trends-footer">
+            {mode === 'ppr' ? 'PPR' : 'Standard'} · Pass 1pt/25yds · 6pt TD · −2 INT · Rush/Rec 1pt/10yds{mode === 'ppr' ? ' · +1pt REC' : ''}
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {seasonStarted && !loading && fetched && filtered.length === 0 && (
+        <div className="leaders-coming-soon">
+          <div className="cs-icon">📊</div>
+          <div className="cs-title">No data for this filter yet</div>
+          <div className="cs-text">Try a different position or week range.</div>
+        </div>
+      )}
+    </div>
+  )
+}
 function Footer() {
   return (
     <footer className="footer">
